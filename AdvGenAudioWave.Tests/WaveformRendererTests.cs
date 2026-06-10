@@ -1,6 +1,7 @@
 using Xunit;
 using AdvGenAudioWave;
 using System.Windows.Media;
+using System.IO;
 
 namespace AdvGenAudioWave.Tests;
 
@@ -114,5 +115,30 @@ public class WaveformRendererRenderTests
             Assert.Equal(255, pixels[2]);  // R channel
             Assert.Equal(255, pixels[3]);  // alpha
         });
+    }
+}
+
+public class WaveformRendererApngTests
+{
+    [Fact]
+    public void ExportApng_CreatesNonEmptyFile()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.apng");
+        try
+        {
+            StaHelper.Run(() =>
+            {
+                var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                WaveformRenderer.ExportApng(
+                    outputPath, peaks, width: 400, height: 100,
+                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationMs: 3000);
+            });
+            Assert.True(File.Exists(outputPath));
+            Assert.True(new FileInfo(outputPath).Length > 0);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
     }
 }

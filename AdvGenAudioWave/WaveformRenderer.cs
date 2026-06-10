@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -64,5 +65,33 @@ public static class WaveformRenderer
         rtb.Render(visual);
         rtb.Freeze();
         return rtb;
+    }
+
+    public static void ExportApng(
+        string outputPath, float[] peaks, int width, int height,
+        System.Windows.Media.Color barColor, int frameCount, long audioDurationMs)
+    {
+        var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
+        var frameDelayCs = ComputeFrameDelayCs(audioDurationMs, frameCount);
+
+        using var collection = new MagickImageCollection();
+        for (var i = 0; i < frameCount; i++)
+        {
+            var frame = RenderFrame(baseWaveform, i, frameCount, width, height);
+            using var ms = new MemoryStream();
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(frame));
+            encoder.Save(ms);
+            ms.Position = 0;
+
+            var magickFrame = new MagickImage(ms);
+            magickFrame.AnimationDelay = (uint)frameDelayCs;
+            collection.Add(magickFrame);
+        }
+
+        if (collection.Count > 0)
+            collection[0].AnimationIterations = 0; // loop forever
+
+        collection.Write(outputPath, MagickFormat.APng);
     }
 }
