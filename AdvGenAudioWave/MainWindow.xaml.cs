@@ -20,4 +20,12 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
     }
+
+    private void Window_Loaded(object sender, RoutedEventArgs e) { }
+    private void Browse_Click(object sender, RoutedEventArgs e) { }
+    private void Settings_Changed(object sender, System.Windows.Controls.TextChangedEventArgs e) { }
+    private void Frames_Changed(object sender, System.Windows.Controls.TextChangedEventArgs e) { }
+    private void PickColor_Click(object sender, RoutedEventArgs e) { }
+    private void ExportApng_Click(object sender, RoutedEventArgs e) { }
+    private void ExportMov_Click(object sender, RoutedEventArgs e) { }
 }
