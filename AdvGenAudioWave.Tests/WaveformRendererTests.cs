@@ -142,3 +142,59 @@ public class WaveformRendererApngTests
         }
     }
 }
+
+public class WaveformRendererMovTests
+{
+    private static bool FfmpegAvailable
+        => File.Exists(Path.Combine(AppContext.BaseDirectory, "ffmpeg.exe"));
+
+    [Fact]
+    public void ExportMov_CreatesNonEmptyFile()
+    {
+        if (!FfmpegAvailable) return;
+
+        var outputPath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.mov");
+        try
+        {
+            StaHelper.Run(() =>
+            {
+                var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                WaveformRenderer.ExportMov(
+                    outputPath, peaks, width: 400, height: 100,
+                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationSeconds: 3.0);
+            });
+            Assert.True(File.Exists(outputPath));
+            Assert.True(new FileInfo(outputPath).Length > 0);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
+    }
+
+    [Fact]
+    public void ExportMov_TempDirCleanedUpAfterExport()
+    {
+        if (!FfmpegAvailable) return;
+
+        var outputPath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.mov");
+        string tempDir = "";
+        try
+        {
+            StaHelper.Run(() =>
+            {
+                var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                tempDir = WaveformRenderer.ExportMov(
+                    outputPath, peaks, 400, 100,
+                    System.Windows.Media.Colors.White, 3, 3.0);
+            });
+            Assert.True(File.Exists(outputPath));
+            Assert.False(Directory.Exists(tempDir), $"Temp dir was not deleted: {tempDir}");
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+        }
+    }
+}
