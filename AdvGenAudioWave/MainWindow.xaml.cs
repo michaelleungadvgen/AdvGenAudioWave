@@ -11,6 +11,8 @@ using MessageBox = System.Windows.MessageBox;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxImage = System.Windows.MessageBoxImage;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
+using Cursors = System.Windows.Input.Cursors;
 
 namespace AdvGenAudioWave;
 
@@ -156,7 +158,85 @@ public partial class MainWindow : Window
         return false;
     }
 
-    // Export handlers added in Task 9
-    private void ExportApng_Click(object sender, RoutedEventArgs e) { }
-    private void ExportMov_Click(object sender, RoutedEventArgs e) { }
+    private void ExportApng_Click(object sender, RoutedEventArgs e)
+    {
+        if (_audioProcessor is null) return;
+        if (!TryGetDimensions(out var width, out var height, out var frameCount))
+        {
+            MessageBox.Show("Fix the highlighted inputs before exporting.", "Validation Error",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Animated PNG|*.apng;*.png",
+            DefaultExt = ".apng",
+            FileName = "waveform"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            var barCount = WaveformRenderer.ComputeBarCount(width);
+            var peaks = _audioProcessor.ExtractPeaks(barCount);
+            WaveformRenderer.ExportApng(
+                dialog.FileName, peaks, width, height, _waveformColor,
+                frameCount, _audioProcessor.TotalDurationMs);
+            MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Export failed: {ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+        }
+    }
+
+    private void ExportMov_Click(object sender, RoutedEventArgs e)
+    {
+        if (_audioProcessor is null) return;
+        if (!TryGetDimensions(out var width, out var height, out var frameCount))
+        {
+            MessageBox.Show("Fix the highlighted inputs before exporting.", "Validation Error",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Filter = "QuickTime Movie|*.mov",
+            DefaultExt = ".mov",
+            FileName = "waveform"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        Mouse.OverrideCursor = Cursors.Wait;
+        try
+        {
+            var barCount = WaveformRenderer.ComputeBarCount(width);
+            var peaks = _audioProcessor.ExtractPeaks(barCount);
+            WaveformRenderer.ExportMov(
+                dialog.FileName, peaks, width, height, _waveformColor,
+                frameCount, _audioProcessor.TotalDurationSeconds);
+            MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            // Unwrap FFMpegCore exceptions to surface ffmpeg stderr output
+            var detail = ex.InnerException?.Message ?? ex.Message;
+            MessageBox.Show($"MOV export failed:\n\n{detail}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            Mouse.OverrideCursor = null;
+        }
+    }
 }
