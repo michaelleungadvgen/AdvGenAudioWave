@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -181,9 +182,11 @@ public partial class MainWindow : Window
         {
             var barCount = WaveformRenderer.ComputeBarCount(width);
             var peaks = _audioProcessor.ExtractPeaks(barCount);
+            var envelope = Enumerable.Repeat(1.0f, frameCount).ToArray();
             WaveformRenderer.ExportApng(
                 dialog.FileName, peaks, width, height, _waveformColor,
-                frameCount, _audioProcessor.TotalDurationMs);
+                frameCount, _audioProcessor.TotalDurationMs,
+                envelope, AnimationMode.CursorSweep);
             MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -221,9 +224,11 @@ public partial class MainWindow : Window
         {
             var barCount = WaveformRenderer.ComputeBarCount(width);
             var peaks = _audioProcessor.ExtractPeaks(barCount);
+            var envelope = Enumerable.Repeat(1.0f, frameCount).ToArray();
             WaveformRenderer.ExportMov(
                 dialog.FileName, peaks, width, height, _waveformColor,
-                frameCount, _audioProcessor.TotalDurationSeconds);
+                frameCount, _audioProcessor.TotalDurationSeconds,
+                envelope, AnimationMode.CursorSweep);
             MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }

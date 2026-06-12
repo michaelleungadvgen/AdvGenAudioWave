@@ -82,7 +82,8 @@ public static class WaveformRenderer
 
     public static void ExportApng(
         string outputPath, float[] peaks, int width, int height,
-        System.Windows.Media.Color barColor, int frameCount, long audioDurationMs)
+        System.Windows.Media.Color barColor, int frameCount, long audioDurationMs,
+        float[] envelope, AnimationMode mode)
     {
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
         var frameDelayCs = ComputeFrameDelayCs(audioDurationMs, frameCount);
@@ -90,7 +91,9 @@ public static class WaveformRenderer
         using var collection = new MagickImageCollection();
         for (var i = 0; i < frameCount; i++)
         {
-            var frame = RenderFrame(baseWaveform, i, frameCount, width, height);
+            var scale = mode == AnimationMode.CursorSweep ? 1.0 : envelope[i];
+            var drawCursor = mode != AnimationMode.Pulse;
+            var frame = RenderFrame(baseWaveform, i, frameCount, width, height, scale, drawCursor);
             using var ms = new MemoryStream();
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(frame));
@@ -111,7 +114,8 @@ public static class WaveformRenderer
     // Returns the temp dir path so callers/tests can verify cleanup.
     public static string ExportMov(
         string outputPath, float[] peaks, int width, int height,
-        System.Windows.Media.Color barColor, int frameCount, double audioDurationSeconds)
+        System.Windows.Media.Color barColor, int frameCount, double audioDurationSeconds,
+        float[] envelope, AnimationMode mode)
     {
         var fps = ComputeFps(frameCount, audioDurationSeconds);
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
@@ -122,7 +126,9 @@ public static class WaveformRenderer
         {
             for (var i = 0; i < frameCount; i++)
             {
-                var frame = RenderFrame(baseWaveform, i, frameCount, width, height);
+                var scale = mode == AnimationMode.CursorSweep ? 1.0 : envelope[i];
+                var drawCursor = mode != AnimationMode.Pulse;
+                var frame = RenderFrame(baseWaveform, i, frameCount, width, height, scale, drawCursor);
                 var framePath = Path.Combine(tempDir, $"frame{i:D4}.png");
                 using var fs = new FileStream(framePath, FileMode.Create);
                 var encoder = new PngBitmapEncoder();

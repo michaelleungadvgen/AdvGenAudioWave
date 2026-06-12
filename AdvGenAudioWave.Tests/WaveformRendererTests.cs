@@ -208,11 +208,36 @@ public class WaveformRendererApngTests
             StaHelper.Run(() =>
             {
                 var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = Enumerable.Repeat(1.0f, 3).ToArray();   // frameCount = 3
                 WaveformRenderer.ExportApng(
                     outputPath, peaks, width: 400, height: 100,
-                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationMs: 3000);
+                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationMs: 3000,
+                    envelope: envelope, mode: AnimationMode.CursorAndPulse);
             });
             Assert.True(File.Exists(outputPath));
+            Assert.True(new FileInfo(outputPath).Length > 0);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
+    }
+
+    [Fact]
+    public void ExportApng_PulseMode_CreatesNonEmptyFile()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.apng");
+        try
+        {
+            StaHelper.Run(() =>
+            {
+                var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = new[] { 0.2f, 0.6f, 1.0f };
+                WaveformRenderer.ExportApng(
+                    outputPath, peaks, 400, 100,
+                    System.Windows.Media.Colors.White, 3, 3000,
+                    envelope, AnimationMode.Pulse);
+            });
             Assert.True(new FileInfo(outputPath).Length > 0);
         }
         finally
@@ -238,9 +263,11 @@ public class WaveformRendererMovTests
             StaHelper.Run(() =>
             {
                 var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = Enumerable.Repeat(1.0f, 3).ToArray();
                 WaveformRenderer.ExportMov(
                     outputPath, peaks, width: 400, height: 100,
-                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationSeconds: 3.0);
+                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationSeconds: 3.0,
+                    envelope: envelope, mode: AnimationMode.CursorAndPulse);
             });
             Assert.True(File.Exists(outputPath));
             Assert.True(new FileInfo(outputPath).Length > 0);
@@ -263,9 +290,11 @@ public class WaveformRendererMovTests
             StaHelper.Run(() =>
             {
                 var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = Enumerable.Repeat(1.0f, 3).ToArray();
                 tempDir = WaveformRenderer.ExportMov(
                     outputPath, peaks, 400, 100,
-                    System.Windows.Media.Colors.White, 3, 3.0);
+                    System.Windows.Media.Colors.White, 3, 3.0,
+                    envelope, AnimationMode.CursorAndPulse);
             });
             Assert.True(File.Exists(outputPath));
             Assert.False(Directory.Exists(tempDir), $"Temp dir was not deleted: {tempDir}");
