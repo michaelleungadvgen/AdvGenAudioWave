@@ -1,0 +1,21 @@
+THIRD-PARTY NOTICES
+===================
+
+This software uses the following third-party components:
+
+NAudio
+License: Microsoft Public License (Ms-PL)
+https://github.com/naudio/NAudio/blob/master/license.txt
+
+Magick.NET
+License: Apache License 2.0
+https://github.com/dlemstra/Magick.NET/blob/main/License.txt
+
+FFMpegCore
+License: MIT License
+https://github.com/rosenbjerg/FFMpegCore/blob/master/LICENSE
+
+FFmpeg
+License: GNU Lesser General Public License v2.1 (LGPL 2.1)
+Distributed as a separate binary (ffmpeg.exe). Source available at:
+https://ffmpeg.org/legal.html
