@@ -116,7 +116,8 @@ public partial class MainWindow : Window
             if (barCount < 1) return;
             var peaks = _audioProcessor.ExtractPeaks(barCount);
             var baseWaveform = WaveformRenderer.RenderBaseWaveform(peaks, width, height, _waveformColor);
-            var frame0 = WaveformRenderer.RenderFrame(baseWaveform, 0, 1, width, height);
+            var frame0 = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 1, width, height, envelopeScale: 1.0, drawCursor: false);
             PreviewImage.Source = frame0;
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
         }
@@ -158,6 +159,13 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private AnimationMode GetAnimationMode() => AnimationModeBox.SelectedIndex switch
+    {
+        0 => AnimationMode.CursorSweep,
+        1 => AnimationMode.Pulse,
+        _ => AnimationMode.CursorAndPulse,
+    };
+
     private void ExportApng_Click(object sender, RoutedEventArgs e)
     {
         if (_audioProcessor is null) return;
@@ -181,9 +189,11 @@ public partial class MainWindow : Window
         {
             var barCount = WaveformRenderer.ComputeBarCount(width);
             var peaks = _audioProcessor.ExtractPeaks(barCount);
+            var envelope = _audioProcessor.ExtractEnvelope(frameCount);
             WaveformRenderer.ExportApng(
                 dialog.FileName, peaks, width, height, _waveformColor,
-                frameCount, _audioProcessor.TotalDurationMs);
+                frameCount, _audioProcessor.TotalDurationMs,
+                envelope, GetAnimationMode());
             MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -221,9 +231,11 @@ public partial class MainWindow : Window
         {
             var barCount = WaveformRenderer.ComputeBarCount(width);
             var peaks = _audioProcessor.ExtractPeaks(barCount);
+            var envelope = _audioProcessor.ExtractEnvelope(frameCount);
             WaveformRenderer.ExportMov(
                 dialog.FileName, peaks, width, height, _waveformColor,
-                frameCount, _audioProcessor.TotalDurationSeconds);
+                frameCount, _audioProcessor.TotalDurationSeconds,
+                envelope, GetAnimationMode());
             MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }

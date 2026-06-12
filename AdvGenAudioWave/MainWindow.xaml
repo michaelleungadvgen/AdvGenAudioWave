@@ -42,6 +42,13 @@
                      VerticalContentAlignment="Center" TextChanged="Frames_Changed"/>
             <TextBlock x:Name="FrameDelayLabel" VerticalAlignment="Center" Foreground="#555"
                        FontSize="11" Margin="0,0,0,0" Text=""/>
+            <Label Content="Animation:" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            <ComboBox x:Name="AnimationModeBox" Width="120" SelectedIndex="2"
+                      VerticalContentAlignment="Center" Margin="0,0,0,0">
+                <ComboBoxItem Content="Cursor sweep"/>
+                <ComboBoxItem Content="Pulse"/>
+                <ComboBoxItem Content="Cursor + Pulse"/>
+            </ComboBox>
         </WrapPanel>
 
         <!-- Row 2: Preview -->

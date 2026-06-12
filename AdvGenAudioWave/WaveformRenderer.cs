@@ -53,14 +53,26 @@ public static class WaveformRenderer
     }
 
     public static BitmapSource RenderFrame(
-        BitmapSource baseWaveform, int frameIndex, int frameCount, int imageWidth, int imageHeight)
+        BitmapSource baseWaveform, int frameIndex, int frameCount,
+        int imageWidth, int imageHeight,
+        double envelopeScale = 1.0, bool drawCursor = true)
     {
-        var cursorX = ComputeCursorX(frameIndex, frameCount, imageWidth);
         var visual = new DrawingVisual();
         using (var ctx = visual.RenderOpen())
         {
+            var centerY = imageHeight / 2.0;
+            var scale = new ScaleTransform(1, envelopeScale, 0, centerY);
+            scale.Freeze();
+            ctx.PushTransform(scale);
             ctx.DrawImage(baseWaveform, new Rect(0, 0, imageWidth, imageHeight));
-            ctx.DrawRectangle(System.Windows.Media.Brushes.Red, null, new Rect(cursorX, 0, 2, imageHeight));
+            ctx.Pop();                       // cursor must NOT be scaled
+
+            if (drawCursor)
+            {
+                var cursorX = ComputeCursorX(frameIndex, frameCount, imageWidth);
+                ctx.DrawRectangle(System.Windows.Media.Brushes.Red, null,
+                    new Rect(cursorX, 0, 2, imageHeight));
+            }
         }
         var rtb = new RenderTargetBitmap(imageWidth, imageHeight, 96, 96, PixelFormats.Pbgra32);
         rtb.Render(visual);
@@ -70,15 +82,21 @@ public static class WaveformRenderer
 
     public static void ExportApng(
         string outputPath, float[] peaks, int width, int height,
-        System.Windows.Media.Color barColor, int frameCount, long audioDurationMs)
+        System.Windows.Media.Color barColor, int frameCount, long audioDurationMs,
+        float[] envelope, AnimationMode mode)
     {
+        if (envelope.Length < frameCount)
+            throw new ArgumentException(
+                $"envelope length ({envelope.Length}) must be >= frameCount ({frameCount}).", nameof(envelope));
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
         var frameDelayCs = ComputeFrameDelayCs(audioDurationMs, frameCount);
 
         using var collection = new MagickImageCollection();
         for (var i = 0; i < frameCount; i++)
         {
-            var frame = RenderFrame(baseWaveform, i, frameCount, width, height);
+            var scale = mode == AnimationMode.CursorSweep ? 1.0 : envelope[i];
+            var drawCursor = mode != AnimationMode.Pulse;
+            var frame = RenderFrame(baseWaveform, i, frameCount, width, height, scale, drawCursor);
             using var ms = new MemoryStream();
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(frame));
@@ -99,8 +117,12 @@ public static class WaveformRenderer
     // Returns the temp dir path so callers/tests can verify cleanup.
     public static string ExportMov(
         string outputPath, float[] peaks, int width, int height,
-        System.Windows.Media.Color barColor, int frameCount, double audioDurationSeconds)
+        System.Windows.Media.Color barColor, int frameCount, double audioDurationSeconds,
+        float[] envelope, AnimationMode mode)
     {
+        if (envelope.Length < frameCount)
+            throw new ArgumentException(
+                $"envelope length ({envelope.Length}) must be >= frameCount ({frameCount}).", nameof(envelope));
         var fps = ComputeFps(frameCount, audioDurationSeconds);
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -110,7 +132,9 @@ public static class WaveformRenderer
         {
             for (var i = 0; i < frameCount; i++)
             {
-                var frame = RenderFrame(baseWaveform, i, frameCount, width, height);
+                var scale = mode == AnimationMode.CursorSweep ? 1.0 : envelope[i];
+                var drawCursor = mode != AnimationMode.Pulse;
+                var frame = RenderFrame(baseWaveform, i, frameCount, width, height, scale, drawCursor);
                 var framePath = Path.Combine(tempDir, $"frame{i:D4}.png");
                 using var fs = new FileStream(framePath, FileMode.Create);
                 var encoder = new PngBitmapEncoder();

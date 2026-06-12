@@ -116,6 +116,85 @@ public class WaveformRendererRenderTests
             Assert.Equal(255, pixels[3]);  // alpha
         });
     }
+
+    // Counts image rows containing at least one non-transparent pixel.
+    private static int OpaqueRowCount(System.Windows.Media.Imaging.BitmapSource bmp)
+    {
+        var w = bmp.PixelWidth;
+        var h = bmp.PixelHeight;
+        var pixels = new byte[w * h * 4];
+        bmp.CopyPixels(pixels, w * 4, 0);
+        var rows = 0;
+        for (var y = 0; y < h; y++)
+        {
+            var rowStart = y * w * 4;
+            for (var x = 0; x < w; x++)
+            {
+                if (pixels[rowStart + x * 4 + 3] != 0) { rows++; break; }
+            }
+        }
+        return rows;
+    }
+
+    [Fact]
+    public void RenderFrame_PulseScaleBelowOne_ShrinksVerticalExtent()
+    {
+        StaHelper.Run(() =>
+        {
+            var baseWaveform = WaveformRenderer.RenderBaseWaveform(
+                FlatPeaks(10, 1.0f), 40, 100, Colors.White);   // full-height bars
+
+            var full = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 10, 40, 100, envelopeScale: 1.0, drawCursor: false);
+            var half = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 10, 40, 100, envelopeScale: 0.5, drawCursor: false);
+
+            var fullRows = OpaqueRowCount(full);
+            var halfRows = OpaqueRowCount(half);
+            Assert.True(halfRows < fullRows,
+                $"half extent ({halfRows}) should be < full ({fullRows})");
+        });
+    }
+
+    [Fact]
+    public void RenderFrame_DrawCursorFalse_ProducesNoOpaquePixelsOnSilentWaveform()
+    {
+        StaHelper.Run(() =>
+        {
+            var baseWaveform = WaveformRenderer.RenderBaseWaveform(
+                FlatPeaks(10, 0f), 40, 20, Colors.White);      // no bars at all
+            var frame = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 10, 40, 20, envelopeScale: 1.0, drawCursor: false);
+
+            var pixels = new byte[40 * 20 * 4];
+            frame.CopyPixels(pixels, 40 * 4, 0);
+            for (var i = 3; i < pixels.Length; i += 4)
+                Assert.Equal(0, pixels[i]);   // fully transparent — no cursor column
+        });
+    }
+
+    [Fact]
+    public void RenderFrame_CursorStaysFullHeight_WhenWaveformPulsedDown()
+    {
+        StaHelper.Run(() =>
+        {
+            // Silent base waveform (no bars), so the only opaque pixels come from the cursor.
+            var baseWaveform = WaveformRenderer.RenderBaseWaveform(
+                FlatPeaks(10, 0f), 40, 100, Colors.White);
+            // Pulse the waveform all the way down; cursor must remain full height at x=0.
+            var frame = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 10, 40, 100, envelopeScale: 0.0, drawCursor: true);
+
+            var pixels = new byte[40 * 100 * 4];
+            frame.CopyPixels(pixels, 40 * 4, 0);
+            // Every row at x=0 must have an opaque red cursor pixel (alpha != 0).
+            for (var y = 0; y < 100; y++)
+            {
+                var alpha = pixels[(y * 40 + 0) * 4 + 3];
+                Assert.NotEqual(0, alpha);
+            }
+        });
+    }
 }
 
 public class WaveformRendererApngTests
@@ -129,12 +208,58 @@ public class WaveformRendererApngTests
             StaHelper.Run(() =>
             {
                 var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = Enumerable.Repeat(1.0f, 3).ToArray();   // frameCount = 3
                 WaveformRenderer.ExportApng(
                     outputPath, peaks, width: 400, height: 100,
-                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationMs: 3000);
+                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationMs: 3000,
+                    envelope: envelope, mode: AnimationMode.CursorAndPulse);
             });
             Assert.True(File.Exists(outputPath));
             Assert.True(new FileInfo(outputPath).Length > 0);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
+    }
+
+    [Fact]
+    public void ExportApng_PulseMode_CreatesNonEmptyFile()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.apng");
+        try
+        {
+            StaHelper.Run(() =>
+            {
+                var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = new[] { 0.2f, 0.6f, 1.0f };
+                WaveformRenderer.ExportApng(
+                    outputPath, peaks, 400, 100,
+                    System.Windows.Media.Colors.White, 3, 3000,
+                    envelope, AnimationMode.Pulse);
+            });
+            Assert.True(File.Exists(outputPath));
+            Assert.True(new FileInfo(outputPath).Length > 0);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
+    }
+
+    [Fact]
+    public void ExportApng_EnvelopeShorterThanFrameCount_Throws()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.apng");
+        try
+        {
+            var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+            var shortEnvelope = new[] { 1.0f, 1.0f };   // only 2, but frameCount = 3
+            Assert.Throws<ArgumentException>(() =>
+                WaveformRenderer.ExportApng(
+                    outputPath, peaks, 400, 100,
+                    System.Windows.Media.Colors.White, 3, 3000,
+                    shortEnvelope, AnimationMode.Pulse));
         }
         finally
         {
@@ -159,9 +284,11 @@ public class WaveformRendererMovTests
             StaHelper.Run(() =>
             {
                 var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = Enumerable.Repeat(1.0f, 3).ToArray();
                 WaveformRenderer.ExportMov(
                     outputPath, peaks, width: 400, height: 100,
-                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationSeconds: 3.0);
+                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationSeconds: 3.0,
+                    envelope: envelope, mode: AnimationMode.CursorAndPulse);
             });
             Assert.True(File.Exists(outputPath));
             Assert.True(new FileInfo(outputPath).Length > 0);
@@ -184,9 +311,11 @@ public class WaveformRendererMovTests
             StaHelper.Run(() =>
             {
                 var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = Enumerable.Repeat(1.0f, 3).ToArray();
                 tempDir = WaveformRenderer.ExportMov(
                     outputPath, peaks, 400, 100,
-                    System.Windows.Media.Colors.White, 3, 3.0);
+                    System.Windows.Media.Colors.White, 3, 3.0,
+                    envelope, AnimationMode.CursorAndPulse);
             });
             Assert.True(File.Exists(outputPath));
             Assert.False(Directory.Exists(tempDir), $"Temp dir was not deleted: {tempDir}");
