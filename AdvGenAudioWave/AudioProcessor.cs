@@ -77,4 +77,32 @@ public sealed class AudioProcessor
 
         return peaks;
     }
+
+    public float[] ExtractEnvelope(int frameCount)
+    {
+        if (frameCount <= 0) throw new ArgumentOutOfRangeException(nameof(frameCount));
+
+        var env = new float[frameCount];
+        if (_samples.Length == 0) return env;
+
+        var chunkSize = Math.Max(1, _samples.Length / frameCount);
+        for (var f = 0; f < frameCount; f++)
+        {
+            var start = f * chunkSize;
+            if (start >= _samples.Length) { env[f] = 0f; continue; }
+            var end = Math.Min(start + chunkSize, _samples.Length);
+
+            double sumSq = 0;
+            for (var j = start; j < end; j++)
+                sumSq += (double)_samples[j] * _samples[j];
+            env[f] = (float)Math.Sqrt(sumSq / (end - start));
+        }
+
+        var max = env.Max();
+        if (max > 0f)
+            for (var i = 0; i < env.Length; i++)
+                env[i] /= max;
+
+        return env;
+    }
 }

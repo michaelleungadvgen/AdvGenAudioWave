@@ -65,4 +65,82 @@ public class AudioProcessorTests
     {
         Assert.ThrowsAny<Exception>(() => AudioProcessor.Load("nonexistent.mp3"));
     }
+
+    // ExtractEnvelope: returns one value per frame
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(60)]
+    public void ExtractEnvelope_ReturnsCorrectLength(int frameCount)
+    {
+        var proc = AudioProcessor.FromSamples(new float[frameCount * 10], durationSeconds: 1.0);
+        var env = proc.ExtractEnvelope(frameCount);
+        Assert.Equal(frameCount, env.Length);
+    }
+
+    // ExtractEnvelope: silence → all zeros (no divide-by-zero)
+    [Fact]
+    public void ExtractEnvelope_Silence_ReturnsAllZeros()
+    {
+        var proc = AudioProcessor.FromSamples(new float[1000], durationSeconds: 1.0);
+        var env = proc.ExtractEnvelope(frameCount: 10);
+        Assert.All(env, v => Assert.Equal(0f, v));
+    }
+
+    // ExtractEnvelope: non-silent input normalizes so the max value is exactly 1.0
+    [Fact]
+    public void ExtractEnvelope_NonSilent_MaxIsOne()
+    {
+        var samples = new float[1000];
+        for (var i = 0; i < samples.Length; i++) samples[i] = 0.3f;
+        var proc = AudioProcessor.FromSamples(samples, durationSeconds: 1.0);
+        var env = proc.ExtractEnvelope(frameCount: 10);
+        Assert.Equal(1.0f, env.Max(), precision: 5);
+    }
+
+    // ExtractEnvelope: all values land in [0, 1]
+    [Fact]
+    public void ExtractEnvelope_AllValuesInUnitRange()
+    {
+        var samples = new float[1000];
+        for (var i = 0; i < samples.Length; i++) samples[i] = (i % 7) / 7f;
+        var proc = AudioProcessor.FromSamples(samples, durationSeconds: 1.0);
+        var env = proc.ExtractEnvelope(frameCount: 20);
+        Assert.All(env, v => Assert.InRange(v, 0f, 1f));
+    }
+
+    // ExtractEnvelope: a louder chunk yields a strictly larger value than a quieter chunk
+    [Fact]
+    public void ExtractEnvelope_LouderChunkExceedsQuieter()
+    {
+        var samples = new float[1000];
+        for (var i = 0; i < 500; i++) samples[i] = 0.2f;        // quiet first half
+        for (var i = 500; i < 1000; i++) samples[i] = 0.8f;     // loud second half
+        var proc = AudioProcessor.FromSamples(samples, durationSeconds: 1.0);
+        var env = proc.ExtractEnvelope(frameCount: 2);
+        Assert.True(env[1] > env[0], $"expected loud env[1] ({env[1]}) > quiet env[0] ({env[0]})");
+        Assert.Equal(1.0f, env[1], precision: 5);
+    }
+
+    // ExtractEnvelope: single frame over non-silent audio normalizes to 1.0
+    [Fact]
+    public void ExtractEnvelope_SingleFrame_NonSilent_IsOne()
+    {
+        var samples = new float[1000];
+        for (var i = 0; i < samples.Length; i++) samples[i] = 0.5f;
+        var proc = AudioProcessor.FromSamples(samples, durationSeconds: 1.0);
+        var env = proc.ExtractEnvelope(frameCount: 1);
+        Assert.Single(env);
+        Assert.Equal(1.0f, env[0], precision: 5);
+    }
+
+    // ExtractEnvelope: invalid frame count throws (UI clamps to [1,9999], but guard anyway)
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void ExtractEnvelope_InvalidFrameCount_Throws(int frameCount)
+    {
+        var proc = AudioProcessor.FromSamples(new float[100], durationSeconds: 1.0);
+        Assert.Throws<ArgumentOutOfRangeException>(() => proc.ExtractEnvelope(frameCount));
+    }
 }
