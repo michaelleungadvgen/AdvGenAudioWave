@@ -116,6 +116,60 @@ public class WaveformRendererRenderTests
             Assert.Equal(255, pixels[3]);  // alpha
         });
     }
+
+    // Counts image rows containing at least one non-transparent pixel.
+    private static int OpaqueRowCount(System.Windows.Media.Imaging.BitmapSource bmp)
+    {
+        var w = bmp.PixelWidth;
+        var h = bmp.PixelHeight;
+        var pixels = new byte[w * h * 4];
+        bmp.CopyPixels(pixels, w * 4, 0);
+        var rows = 0;
+        for (var y = 0; y < h; y++)
+        {
+            var rowStart = y * w * 4;
+            for (var x = 0; x < w; x++)
+            {
+                if (pixels[rowStart + x * 4 + 3] != 0) { rows++; break; }
+            }
+        }
+        return rows;
+    }
+
+    [Fact]
+    public void RenderFrame_PulseScaleBelowOne_ShrinksVerticalExtent()
+    {
+        StaHelper.Run(() =>
+        {
+            var baseWaveform = WaveformRenderer.RenderBaseWaveform(
+                FlatPeaks(10, 1.0f), 40, 100, Colors.White);   // full-height bars
+
+            var full = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 10, 40, 100, envelopeScale: 1.0, drawCursor: false);
+            var half = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 10, 40, 100, envelopeScale: 0.5, drawCursor: false);
+
+            Assert.True(OpaqueRowCount(half) < OpaqueRowCount(full),
+                $"half extent ({OpaqueRowCount(half)}) should be < full ({OpaqueRowCount(full)})");
+        });
+    }
+
+    [Fact]
+    public void RenderFrame_DrawCursorFalse_ProducesNoOpaquePixelsOnSilentWaveform()
+    {
+        StaHelper.Run(() =>
+        {
+            var baseWaveform = WaveformRenderer.RenderBaseWaveform(
+                FlatPeaks(10, 0f), 40, 20, Colors.White);      // no bars at all
+            var frame = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 10, 40, 20, envelopeScale: 1.0, drawCursor: false);
+
+            var pixels = new byte[40 * 20 * 4];
+            frame.CopyPixels(pixels, 40 * 4, 0);
+            for (var i = 3; i < pixels.Length; i += 4)
+                Assert.Equal(0, pixels[i]);   // fully transparent — no cursor column
+        });
+    }
 }
 
 public class WaveformRendererApngTests

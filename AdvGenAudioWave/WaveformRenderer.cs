@@ -53,14 +53,26 @@ public static class WaveformRenderer
     }
 
     public static BitmapSource RenderFrame(
-        BitmapSource baseWaveform, int frameIndex, int frameCount, int imageWidth, int imageHeight)
+        BitmapSource baseWaveform, int frameIndex, int frameCount,
+        int imageWidth, int imageHeight,
+        double envelopeScale = 1.0, bool drawCursor = true)
     {
-        var cursorX = ComputeCursorX(frameIndex, frameCount, imageWidth);
         var visual = new DrawingVisual();
         using (var ctx = visual.RenderOpen())
         {
+            var centerY = imageHeight / 2.0;
+            var scale = new ScaleTransform(1, envelopeScale, 0, centerY);
+            scale.Freeze();
+            ctx.PushTransform(scale);
             ctx.DrawImage(baseWaveform, new Rect(0, 0, imageWidth, imageHeight));
-            ctx.DrawRectangle(System.Windows.Media.Brushes.Red, null, new Rect(cursorX, 0, 2, imageHeight));
+            ctx.Pop();                       // cursor must NOT be scaled
+
+            if (drawCursor)
+            {
+                var cursorX = ComputeCursorX(frameIndex, frameCount, imageWidth);
+                ctx.DrawRectangle(System.Windows.Media.Brushes.Red, null,
+                    new Rect(cursorX, 0, 2, imageHeight));
+            }
         }
         var rtb = new RenderTargetBitmap(imageWidth, imageHeight, 96, 96, PixelFormats.Pbgra32);
         rtb.Render(visual);
