@@ -2,7 +2,10 @@
 
 **Date:** 2026-06-12
 **Status:** Approved
-**Builds on:** `2026-06-08-audiowaveform-design.md`
+**Builds on:** the base AdvGenAudioWave design — `2026-06-08-audiowaveform-design.md` in the
+AdvGenFlow docs repo (`c:\Users\advgen10\source\repos\AdvGenFlow\docs\superpowers\specs\`).
+The implementation source of truth is the existing code: `AudioProcessor.cs`,
+`WaveformRenderer.cs`, `MainWindow.xaml.cs`.
 
 ---
 
@@ -157,6 +160,11 @@ Add one `ComboBox` ("Animation:") near the Frames input in `MainWindow.xaml`, bo
 - **Preview** continues to show a representative still: frame 0 at `envelopeScale = 1.0`,
   `drawCursor = false`. Rendering the preview at the live envelope could show a tiny waveform
   during a quiet intro, which is misleading — full-scale is the clearest representative still.
+  **Intentional behavior change:** today the preview calls `RenderFrame(base, 0, 1, ...)` which
+  draws the red cursor at the left edge (`cursorX = 0`). With this feature the preview sets
+  `drawCursor = false`, so the cursor column disappears from the preview. This is a deliberate
+  improvement, not a regression — the preview becomes a clean representative still of the
+  waveform shape.
 - Mode is read-only metadata for the renderer; it does not affect frame count, delay, or fps.
 
 ---
