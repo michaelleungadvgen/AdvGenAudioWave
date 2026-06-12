@@ -238,7 +238,28 @@ public class WaveformRendererApngTests
                     System.Windows.Media.Colors.White, 3, 3000,
                     envelope, AnimationMode.Pulse);
             });
+            Assert.True(File.Exists(outputPath));
             Assert.True(new FileInfo(outputPath).Length > 0);
+        }
+        finally
+        {
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
+    }
+
+    [Fact]
+    public void ExportApng_EnvelopeShorterThanFrameCount_Throws()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.apng");
+        try
+        {
+            var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+            var shortEnvelope = new[] { 1.0f, 1.0f };   // only 2, but frameCount = 3
+            Assert.Throws<ArgumentException>(() =>
+                WaveformRenderer.ExportApng(
+                    outputPath, peaks, 400, 100,
+                    System.Windows.Media.Colors.White, 3, 3000,
+                    shortEnvelope, AnimationMode.Pulse));
         }
         finally
         {

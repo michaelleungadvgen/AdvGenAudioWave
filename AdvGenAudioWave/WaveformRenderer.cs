@@ -85,6 +85,9 @@ public static class WaveformRenderer
         System.Windows.Media.Color barColor, int frameCount, long audioDurationMs,
         float[] envelope, AnimationMode mode)
     {
+        if (envelope.Length < frameCount)
+            throw new ArgumentException(
+                $"envelope length ({envelope.Length}) must be >= frameCount ({frameCount}).", nameof(envelope));
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
         var frameDelayCs = ComputeFrameDelayCs(audioDurationMs, frameCount);
 
@@ -117,6 +120,9 @@ public static class WaveformRenderer
         System.Windows.Media.Color barColor, int frameCount, double audioDurationSeconds,
         float[] envelope, AnimationMode mode)
     {
+        if (envelope.Length < frameCount)
+            throw new ArgumentException(
+                $"envelope length ({envelope.Length}) must be >= frameCount ({frameCount}).", nameof(envelope));
         var fps = ComputeFps(frameCount, audioDurationSeconds);
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
