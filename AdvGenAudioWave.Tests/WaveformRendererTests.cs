@@ -149,8 +149,10 @@ public class WaveformRendererRenderTests
             var half = WaveformRenderer.RenderFrame(
                 baseWaveform, 0, 10, 40, 100, envelopeScale: 0.5, drawCursor: false);
 
-            Assert.True(OpaqueRowCount(half) < OpaqueRowCount(full),
-                $"half extent ({OpaqueRowCount(half)}) should be < full ({OpaqueRowCount(full)})");
+            var fullRows = OpaqueRowCount(full);
+            var halfRows = OpaqueRowCount(half);
+            Assert.True(halfRows < fullRows,
+                $"half extent ({halfRows}) should be < full ({fullRows})");
         });
     }
 
@@ -168,6 +170,29 @@ public class WaveformRendererRenderTests
             frame.CopyPixels(pixels, 40 * 4, 0);
             for (var i = 3; i < pixels.Length; i += 4)
                 Assert.Equal(0, pixels[i]);   // fully transparent — no cursor column
+        });
+    }
+
+    [Fact]
+    public void RenderFrame_CursorStaysFullHeight_WhenWaveformPulsedDown()
+    {
+        StaHelper.Run(() =>
+        {
+            // Silent base waveform (no bars), so the only opaque pixels come from the cursor.
+            var baseWaveform = WaveformRenderer.RenderBaseWaveform(
+                FlatPeaks(10, 0f), 40, 100, Colors.White);
+            // Pulse the waveform all the way down; cursor must remain full height at x=0.
+            var frame = WaveformRenderer.RenderFrame(
+                baseWaveform, 0, 10, 40, 100, envelopeScale: 0.0, drawCursor: true);
+
+            var pixels = new byte[40 * 100 * 4];
+            frame.CopyPixels(pixels, 40 * 4, 0);
+            // Every row at x=0 must have an opaque red cursor pixel (alpha != 0).
+            for (var y = 0; y < 100; y++)
+            {
+                var alpha = pixels[(y * 40 + 0) * 4 + 3];
+                Assert.NotEqual(0, alpha);
+            }
         });
     }
 }
