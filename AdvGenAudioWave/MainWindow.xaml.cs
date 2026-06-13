@@ -211,7 +211,13 @@ public partial class MainWindow : Window
     private void ExportMov_Click(object sender, RoutedEventArgs e)
     {
         if (_audioProcessor is null) return;
-        if (!TryGetDimensions(out var width, out var height, out var frameCount))
+        // MOV length is driven by FPS × audio duration, not the Frames field, so validate
+        // width/height/FPS independently. '&=' (non-short-circuit) highlights every bad box.
+        var ok = true;
+        ok &= TryParseInput(WidthBox, 1, 10000, out var width);
+        ok &= TryParseInput(HeightBox, 1, 10000, out var height);
+        ok &= TryParseInput(FpsBox, 1, 60, out var fps);
+        if (!ok)
         {
             MessageBox.Show("Fix the highlighted inputs before exporting.", "Validation Error",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -231,11 +237,11 @@ public partial class MainWindow : Window
         {
             var barCount = WaveformRenderer.ComputeBarCount(width);
             var peaks = _audioProcessor.ExtractPeaks(barCount);
-            var envelope = _audioProcessor.ExtractEnvelope(frameCount);
+            var movFrames = WaveformRenderer.ComputeMovFrameCount(fps, _audioProcessor.TotalDurationSeconds);
+            var envelope = _audioProcessor.ExtractEnvelope(movFrames);
             WaveformRenderer.ExportMov(
                 dialog.FileName, peaks, width, height, _waveformColor,
-                frameCount, _audioProcessor.TotalDurationSeconds,
-                envelope, GetAnimationMode());
+                movFrames, fps, envelope, GetAnimationMode());
             MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
