@@ -12,7 +12,6 @@ using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxImage = System.Windows.MessageBoxImage;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
-using Cursors = System.Windows.Input.Cursors;
 
 namespace AdvGenAudioWave;
 
@@ -21,6 +20,7 @@ public partial class MainWindow : Window
     private AudioProcessor? _audioProcessor;
     private Color _waveformColor = Colors.White;
     private bool _ffmpegAvailable;
+    private CancellationTokenSource? _exportCts;
 
     public MainWindow() => InitializeComponent();
 
@@ -166,7 +166,7 @@ public partial class MainWindow : Window
         _ => AnimationMode.CursorAndPulse,
     };
 
-    private void ExportApng_Click(object sender, RoutedEventArgs e)
+    private async void ExportApng_Click(object sender, RoutedEventArgs e)
     {
         if (_audioProcessor is null) return;
         if (!TryGetDimensions(out var width, out var height, out var frameCount))
@@ -184,31 +184,54 @@ public partial class MainWindow : Window
         };
         if (dialog.ShowDialog() != true) return;
 
-        Mouse.OverrideCursor = Cursors.Wait;
+        // Capture all UI-thread state before handing off to the background thread.
+        var proc = _audioProcessor;
+        var path = dialog.FileName;
+        var color = _waveformColor;
+        var mode = GetAnimationMode();
+        var durationMs = proc.TotalDurationMs;
+        var progress = new Progress<ExportProgress>(OnExportProgress);
+        _exportCts = new CancellationTokenSource();
+        var token = _exportCts.Token;
+
+        SetExporting(true);
         try
         {
-            var barCount = WaveformRenderer.ComputeBarCount(width);
-            var peaks = _audioProcessor.ExtractPeaks(barCount);
-            var envelope = _audioProcessor.ExtractEnvelope(frameCount);
-            WaveformRenderer.ExportApng(
-                dialog.FileName, peaks, width, height, _waveformColor,
-                frameCount, _audioProcessor.TotalDurationMs,
-                envelope, GetAnimationMode());
-            MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
+            await RunStaAsync(() =>
+            {
+                var barCount = WaveformRenderer.ComputeBarCount(width);
+                var peaks = proc.ExtractPeaks(barCount);
+                var envelope = proc.ExtractEnvelope(frameCount);
+                WaveformRenderer.ExportApng(
+                    path, peaks, width, height, color,
+                    frameCount, durationMs, envelope, mode, progress, token);
+            });
+            MessageBox.Show($"Saved to:\n{path}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Export failed: {ex.Message}", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            if (token.IsCancellationRequested)
+            {
+                DeletePartialFile(path);
+                MessageBox.Show("Export cancelled.", "Cancelled",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                MessageBox.Show($"Export failed: {ex.InnerException?.Message ?? ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
         finally
         {
-            Mouse.OverrideCursor = null;
+            SetExporting(false);
+            _exportCts.Dispose();
+            _exportCts = null;
         }
     }
 
-    private void ExportMov_Click(object sender, RoutedEventArgs e)
+    private async void ExportMov_Click(object sender, RoutedEventArgs e)
     {
         if (_audioProcessor is null) return;
         // MOV length is driven by FPS × audio duration, not the Frames field, so validate
@@ -232,29 +255,113 @@ public partial class MainWindow : Window
         };
         if (dialog.ShowDialog() != true) return;
 
-        Mouse.OverrideCursor = Cursors.Wait;
+        // Capture all UI-thread state before handing off to the background thread.
+        var proc = _audioProcessor;
+        var path = dialog.FileName;
+        var color = _waveformColor;
+        var mode = GetAnimationMode();
+        var durationSeconds = proc.TotalDurationSeconds;
+        var progress = new Progress<ExportProgress>(OnExportProgress);
+        _exportCts = new CancellationTokenSource();
+        var token = _exportCts.Token;
+
+        SetExporting(true);
         try
         {
-            var barCount = WaveformRenderer.ComputeBarCount(width);
-            var peaks = _audioProcessor.ExtractPeaks(barCount);
-            var movFrames = WaveformRenderer.ComputeMovFrameCount(fps, _audioProcessor.TotalDurationSeconds);
-            var envelope = _audioProcessor.ExtractEnvelope(movFrames);
-            WaveformRenderer.ExportMov(
-                dialog.FileName, peaks, width, height, _waveformColor,
-                movFrames, fps, envelope, GetAnimationMode());
-            MessageBox.Show($"Saved to:\n{dialog.FileName}", "Export Complete",
+            await RunStaAsync(() =>
+            {
+                var barCount = WaveformRenderer.ComputeBarCount(width);
+                var peaks = proc.ExtractPeaks(barCount);
+                var movFrames = WaveformRenderer.ComputeMovFrameCount(fps, durationSeconds);
+                var envelope = proc.ExtractEnvelope(movFrames);
+                WaveformRenderer.ExportMov(
+                    path, peaks, width, height, color,
+                    movFrames, fps, envelope, mode, progress, token);
+            });
+            MessageBox.Show($"Saved to:\n{path}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            // Unwrap FFMpegCore exceptions to surface ffmpeg stderr output
-            var detail = ex.InnerException?.Message ?? ex.Message;
-            MessageBox.Show($"MOV export failed:\n\n{detail}", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            if (token.IsCancellationRequested)
+            {
+                DeletePartialFile(path);
+                MessageBox.Show("Export cancelled.", "Cancelled",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                // Unwrap FFMpegCore exceptions to surface ffmpeg stderr output
+                var detail = ex.InnerException?.Message ?? ex.Message;
+                MessageBox.Show($"MOV export failed:\n\n{detail}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
         finally
         {
-            Mouse.OverrideCursor = null;
+            SetExporting(false);
+            _exportCts.Dispose();
+            _exportCts = null;
         }
+    }
+
+    // Reflects the export progress (marshalled to the UI thread by Progress<T>).
+    private void OnExportProgress(ExportProgress p)
+    {
+        ExportStatus.Text = p.Phase;
+        if (double.IsNaN(p.Fraction))
+        {
+            ExportProgressBar.IsIndeterminate = true;
+        }
+        else
+        {
+            ExportProgressBar.IsIndeterminate = false;
+            ExportProgressBar.Value = p.Fraction * 100;
+        }
+    }
+
+    private void CancelExport_Click(object sender, RoutedEventArgs e)
+    {
+        _exportCts?.Cancel();
+        CancelExportButton.IsEnabled = false;
+        ExportStatus.Text = "Cancelling…";
+    }
+
+    private static void DeletePartialFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch { /* best-effort cleanup of a partially-written file */ }
+    }
+
+    // Toggle the export UI: disable inputs and show the progress bar while exporting.
+    private void SetExporting(bool exporting)
+    {
+        BrowseButton.IsEnabled = !exporting;
+        ExportApngButton.IsEnabled = !exporting;
+        ExportMovButton.IsEnabled = !exporting && _ffmpegAvailable;
+        ExportProgressPanel.Visibility = exporting ? Visibility.Visible : Visibility.Collapsed;
+        if (exporting)
+        {
+            ExportProgressBar.IsIndeterminate = false;
+            ExportProgressBar.Value = 0;
+            ExportStatus.Text = "Starting…";
+            CancelExportButton.IsEnabled = true;
+        }
+    }
+
+    // Runs the export on a dedicated STA thread (WPF rendering requires STA) without
+    // blocking the UI thread, and surfaces exceptions through the returned Task.
+    private static Task RunStaAsync(Action action)
+    {
+        var tcs = new TaskCompletionSource();
+        var thread = new Thread(() =>
+        {
+            try { action(); tcs.SetResult(); }
+            catch (Exception ex) { tcs.SetException(ex); }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
+        thread.Start();
+        return tcs.Task;
     }
 }
