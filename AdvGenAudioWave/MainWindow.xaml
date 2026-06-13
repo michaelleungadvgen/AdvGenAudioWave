@@ -15,7 +15,7 @@
 
         <!-- Row 0: Browse -->
         <DockPanel Grid.Row="0" Margin="0,0,0,8">
-            <Button DockPanel.Dock="Left" Content="Browse MP3…" Click="Browse_Click" Width="100" Padding="6,4"/>
+            <Button x:Name="BrowseButton" DockPanel.Dock="Left" Content="Browse MP3…" Click="Browse_Click" Width="100" Padding="6,4"/>
             <TextBox x:Name="FilePathBox" IsReadOnly="True" Margin="8,0,0,0"
                      VerticalContentAlignment="Center" Text="No file selected"
                      Background="#F5F5F5" Foreground="#888"/>
@@ -72,12 +72,20 @@
                    Visibility="Collapsed" Margin="0,4,0,0" FontSize="11"
                    Text="Note: animation delay capped at 655 s/frame — increase frame count for accurate sync"/>
 
-        <!-- Row 4: Export buttons -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button x:Name="ExportApngButton" Content="Export as APNG"
-                    Click="ExportApng_Click" IsEnabled="False" Width="130" Padding="8,5" Margin="0,0,8,0"/>
-            <Button x:Name="ExportMovButton" Content="Export as MOV"
-                    Click="ExportMov_Click" IsEnabled="False" Width="130" Padding="8,5"/>
-        </StackPanel>
+        <!-- Row 4: Export buttons + progress -->
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="ExportApngButton" Content="Export as APNG"
+                        Click="ExportApng_Click" IsEnabled="False" Width="130" Padding="8,5" Margin="0,0,8,0"/>
+                <Button x:Name="ExportMovButton" Content="Export as MOV"
+                        Click="ExportMov_Click" IsEnabled="False" Width="130" Padding="8,5"/>
+            </StackPanel>
+            <StackPanel x:Name="ExportProgressPanel" Orientation="Horizontal"
+                        Visibility="Collapsed" VerticalAlignment="Center">
+                <ProgressBar x:Name="ExportProgressBar" Width="220" Height="16" Minimum="0" Maximum="100"/>
+                <TextBlock x:Name="ExportStatus" Margin="8,0,0,0" VerticalAlignment="Center"
+                           FontSize="11" Foreground="#555" Text=""/>
+            </StackPanel>
+        </DockPanel>
     </Grid>
 </Window>

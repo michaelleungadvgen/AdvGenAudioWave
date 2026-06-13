@@ -267,6 +267,43 @@ public class WaveformRendererApngTests
             if (File.Exists(outputPath)) File.Delete(outputPath);
         }
     }
+
+    [Fact]
+    public void ExportApng_ReportsProgress()
+    {
+        StaHelper.Run(() =>
+        {
+            var outputPath = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.apng");
+            try
+            {
+                var peaks = Enumerable.Repeat(0.5f, 100).ToArray();
+                var envelope = Enumerable.Repeat(1.0f, 5).ToArray();
+                var recorder = new RecordingProgress();
+                WaveformRenderer.ExportApng(
+                    outputPath, peaks, 100, 50,
+                    System.Windows.Media.Colors.White, 5, 3000,
+                    envelope, AnimationMode.CursorAndPulse, recorder);
+
+                Assert.NotEmpty(recorder.Reports);
+                // Final frame reports fraction 1.0 ...
+                Assert.Contains(recorder.Reports, r => Math.Abs(r.Fraction - 1.0) < 1e-9);
+                // ... and the write/encode phase reports an indeterminate (NaN) fraction.
+                Assert.Contains(recorder.Reports, r => double.IsNaN(r.Fraction));
+            }
+            finally
+            {
+                if (File.Exists(outputPath)) File.Delete(outputPath);
+            }
+        });
+    }
+
+    // Synchronous IProgress so reports are captured deterministically on the calling thread
+    // (unlike Progress<T>, which marshals asynchronously).
+    private sealed class RecordingProgress : IProgress<ExportProgress>
+    {
+        public List<ExportProgress> Reports { get; } = new();
+        public void Report(ExportProgress value) => Reports.Add(value);
+    }
 }
 
 public class WaveformRendererMovTests

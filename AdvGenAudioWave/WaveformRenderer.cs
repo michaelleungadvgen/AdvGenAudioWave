@@ -85,13 +85,14 @@ public static class WaveformRenderer
     public static void ExportApng(
         string outputPath, float[] peaks, int width, int height,
         System.Windows.Media.Color barColor, int frameCount, long audioDurationMs,
-        float[] envelope, AnimationMode mode)
+        float[] envelope, AnimationMode mode, IProgress<ExportProgress>? progress = null)
     {
         if (envelope.Length < frameCount)
             throw new ArgumentException(
                 $"envelope length ({envelope.Length}) must be >= frameCount ({frameCount}).", nameof(envelope));
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
         var frameDelayCs = ComputeFrameDelayCs(audioDurationMs, frameCount);
+        var reportStep = Math.Max(1, frameCount / 100);
 
         using var collection = new MagickImageCollection();
         for (var i = 0; i < frameCount; i++)
@@ -108,11 +109,15 @@ public static class WaveformRenderer
             var magickFrame = new MagickImage(ms);
             magickFrame.AnimationDelay = (uint)frameDelayCs;
             collection.Add(magickFrame);
+
+            if (i % reportStep == 0 || i == frameCount - 1)
+                progress?.Report(new ExportProgress("Rendering frames", (i + 1) / (double)frameCount));
         }
 
         if (collection.Count > 0)
             collection[0].AnimationIterations = 0; // loop forever
 
+        progress?.Report(new ExportProgress("Writing APNG", double.NaN));
         collection.Write(outputPath, MagickFormat.APng);
     }
 
@@ -120,7 +125,7 @@ public static class WaveformRenderer
     public static string ExportMov(
         string outputPath, float[] peaks, int width, int height,
         System.Windows.Media.Color barColor, int frameCount, double fps,
-        float[] envelope, AnimationMode mode)
+        float[] envelope, AnimationMode mode, IProgress<ExportProgress>? progress = null)
     {
         if (envelope.Length < frameCount)
             throw new ArgumentException(
@@ -128,6 +133,7 @@ public static class WaveformRenderer
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);
+        var reportStep = Math.Max(1, frameCount / 100);
 
         try
         {
@@ -141,8 +147,12 @@ public static class WaveformRenderer
                 var encoder = new PngBitmapEncoder();
                 encoder.Frames.Add(BitmapFrame.Create(frame));
                 encoder.Save(fs);
+
+                if (i % reportStep == 0 || i == frameCount - 1)
+                    progress?.Report(new ExportProgress("Rendering frames", (i + 1) / (double)frameCount));
             }
 
+            progress?.Report(new ExportProgress("Encoding video", double.NaN));
             var inputPattern = Path.Combine(tempDir, "frame%04d.png");
             FFMpegArguments
                 .FromFileInput(inputPattern, false, opt =>
