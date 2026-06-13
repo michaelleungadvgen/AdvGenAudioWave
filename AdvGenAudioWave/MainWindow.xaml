@@ -39,9 +39,14 @@
             </Button>
             <Label Content="Frames:" VerticalAlignment="Center"/>
             <TextBox x:Name="FramesBox" Text="60" Width="55" Margin="0,0,8,0"
-                     VerticalContentAlignment="Center" TextChanged="Frames_Changed"/>
+                     VerticalContentAlignment="Center" TextChanged="Frames_Changed"
+                     ToolTip="Number of animation frames for APNG export"/>
             <TextBlock x:Name="FrameDelayLabel" VerticalAlignment="Center" Foreground="#555"
                        FontSize="11" Margin="0,0,0,0" Text=""/>
+            <Label Content="MOV FPS:" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            <TextBox x:Name="FpsBox" Text="30" Width="45" Margin="0,0,0,0"
+                     VerticalContentAlignment="Center"
+                     ToolTip="Frame rate for MOV export. The MOV length always matches the audio."/>
             <Label Content="Animation:" VerticalAlignment="Center" Margin="12,0,0,0"/>
             <ComboBox x:Name="AnimationModeBox" Width="120" SelectedIndex="2"
                       VerticalContentAlignment="Center" Margin="0,0,0,0">

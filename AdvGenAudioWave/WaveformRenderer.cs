@@ -24,8 +24,10 @@ public static class WaveformRenderer
     internal static int ComputeFrameDelayCs(double durationMs, int frameCount)
         => Math.Clamp((int)Math.Round(durationMs / frameCount / 10.0), 1, 65535);
 
-    internal static double ComputeFps(int frameCount, double durationSeconds)
-        => Math.Max(1.0, (double)frameCount / durationSeconds);
+    // Number of MOV frames to render so the video length equals the audio length
+    // at the chosen frame rate: frames / fps == duration. Floors at 1.
+    internal static int ComputeMovFrameCount(double fps, double durationSeconds)
+        => Math.Max(1, (int)Math.Round(fps * durationSeconds));
 
     public static BitmapSource RenderBaseWaveform(
         float[] peaks, int width, int height, System.Windows.Media.Color barColor)
@@ -117,13 +119,12 @@ public static class WaveformRenderer
     // Returns the temp dir path so callers/tests can verify cleanup.
     public static string ExportMov(
         string outputPath, float[] peaks, int width, int height,
-        System.Windows.Media.Color barColor, int frameCount, double audioDurationSeconds,
+        System.Windows.Media.Color barColor, int frameCount, double fps,
         float[] envelope, AnimationMode mode)
     {
         if (envelope.Length < frameCount)
             throw new ArgumentException(
                 $"envelope length ({envelope.Length}) must be >= frameCount ({frameCount}).", nameof(envelope));
-        var fps = ComputeFps(frameCount, audioDurationSeconds);
         var baseWaveform = RenderBaseWaveform(peaks, width, height, barColor);
         var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
         Directory.CreateDirectory(tempDir);

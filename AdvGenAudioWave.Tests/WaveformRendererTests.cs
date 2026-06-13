@@ -42,13 +42,14 @@ public class WaveformRendererMathTests
     public void ComputeFrameDelayCs_ClampsCorrectly(double durationMs, int frameCount, int expected)
         => Assert.Equal(expected, WaveformRenderer.ComputeFrameDelayCs(durationMs, frameCount));
 
-    [Fact]
-    public void ComputeFps_VeryLongAudio_FloorAtOne()
-        => Assert.Equal(1.0, WaveformRenderer.ComputeFps(1, 3600.0), precision: 5);
-
-    [Fact]
-    public void ComputeFps_NormalValues_IsCorrect()
-        => Assert.Equal(10.0, WaveformRenderer.ComputeFps(60, 6.0), precision: 5);
+    [Theory]
+    [InlineData(30.0, 232.0, 6960)]   // 3:52 at 30 fps
+    [InlineData(24.0, 232.0, 5568)]   // 3:52 at 24 fps
+    [InlineData(30.0, 6.0, 180)]
+    [InlineData(1.0, 3600.0, 3600)]   // long audio: no fps floor, length still matches
+    [InlineData(30.0, 0.01, 1)]       // rounds to 0 → floored to 1 frame
+    public void ComputeMovFrameCount_MatchesAudioLength(double fps, double durationSeconds, int expected)
+        => Assert.Equal(expected, WaveformRenderer.ComputeMovFrameCount(fps, durationSeconds));
 }
 
 public class WaveformRendererRenderTests
@@ -287,7 +288,7 @@ public class WaveformRendererMovTests
                 var envelope = Enumerable.Repeat(1.0f, 3).ToArray();
                 WaveformRenderer.ExportMov(
                     outputPath, peaks, width: 400, height: 100,
-                    barColor: System.Windows.Media.Colors.White, frameCount: 3, audioDurationSeconds: 3.0,
+                    barColor: System.Windows.Media.Colors.White, frameCount: 3, fps: 1.0,
                     envelope: envelope, mode: AnimationMode.CursorAndPulse);
             });
             Assert.True(File.Exists(outputPath));
@@ -314,7 +315,7 @@ public class WaveformRendererMovTests
                 var envelope = Enumerable.Repeat(1.0f, 3).ToArray();
                 tempDir = WaveformRenderer.ExportMov(
                     outputPath, peaks, 400, 100,
-                    System.Windows.Media.Colors.White, 3, 3.0,
+                    System.Windows.Media.Colors.White, 3, 1.0,
                     envelope, AnimationMode.CursorAndPulse);
             });
             Assert.True(File.Exists(outputPath));

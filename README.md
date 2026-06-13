@@ -26,7 +26,7 @@ ProRes 4444) overlaid on video to produce the animated waveform effect.
   - **Cursor + Pulse** *(default)* — both at once.
 - **Two export formats, both with a transparent background:**
   - **APNG** — looping animated PNG, assembled with [Magick.NET](https://github.com/dlemstra/Magick.NET).
-  - **MOV** — ProRes 4444 with a real alpha channel (`yuva444p10le`), encoded via [FFMpegCore](https://github.com/rosenbjerg/FFMpegCore) + `ffmpeg`.
+  - **MOV** — ProRes 4444 with a real alpha channel (`yuva444p10le`), encoded via [FFMpegCore](https://github.com/rosenbjerg/FFMpegCore) + `ffmpeg`. **MOV length always matches the source MP3** — set the frame rate and the app renders exactly the right number of frames.
 - **Live preview** — a representative still of the waveform updates as you change size and color.
 - **Configurable** — output width/height, bar color, and frame count (which controls animation smoothness and loop timing).
 
@@ -58,8 +58,13 @@ dotnet run --project AdvGenAudioWave/AdvGenAudioWave.csproj
 
 1. **Browse MP3…** and select an audio file.
 2. Set the **Width**, **Height**, and **Color** for the waveform. The preview updates live.
-3. Set the **Frames** count. More frames = smoother animation. The **Frame delay** label shows
-   the resulting per-frame timing so the loop stays in sync with the audio duration.
+3. Set the animation rate:
+   - **Frames** — used for **APNG**. More frames = smoother animation; the **Frame delay**
+     label shows the resulting per-frame timing so the loop stays in sync with the audio.
+   - **MOV FPS** — used for **MOV** (default 30, range 1–60). The MOV length always equals the
+     MP3 length; the app renders `FPS × audio-duration` frames automatically. Long tracks at a
+     high FPS mean many frames — slower export and a larger temporary folder — so lower the FPS
+     for very long audio.
 4. Pick an **Animation** mode: *Cursor sweep*, *Pulse*, or *Cursor + Pulse*.
 5. **Export as APNG** or **Export as MOV** and choose where to save.
 6. Overlay the result on your MP3 in a video editor — the transparent background composites
