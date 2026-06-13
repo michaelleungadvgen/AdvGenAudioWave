@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private AudioProcessor? _audioProcessor;
     private Color _waveformColor = Colors.White;
     private bool _ffmpegAvailable;
+    private CancellationTokenSource? _exportCts;
 
     public MainWindow() => InitializeComponent();
 
@@ -190,6 +191,8 @@ public partial class MainWindow : Window
         var mode = GetAnimationMode();
         var durationMs = proc.TotalDurationMs;
         var progress = new Progress<ExportProgress>(OnExportProgress);
+        _exportCts = new CancellationTokenSource();
+        var token = _exportCts.Token;
 
         SetExporting(true);
         try
@@ -201,19 +204,30 @@ public partial class MainWindow : Window
                 var envelope = proc.ExtractEnvelope(frameCount);
                 WaveformRenderer.ExportApng(
                     path, peaks, width, height, color,
-                    frameCount, durationMs, envelope, mode, progress);
+                    frameCount, durationMs, envelope, mode, progress, token);
             });
             MessageBox.Show($"Saved to:\n{path}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Export failed: {ex.InnerException?.Message ?? ex.Message}", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            if (token.IsCancellationRequested)
+            {
+                DeletePartialFile(path);
+                MessageBox.Show("Export cancelled.", "Cancelled",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                MessageBox.Show($"Export failed: {ex.InnerException?.Message ?? ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
         finally
         {
             SetExporting(false);
+            _exportCts.Dispose();
+            _exportCts = null;
         }
     }
 
@@ -248,6 +262,8 @@ public partial class MainWindow : Window
         var mode = GetAnimationMode();
         var durationSeconds = proc.TotalDurationSeconds;
         var progress = new Progress<ExportProgress>(OnExportProgress);
+        _exportCts = new CancellationTokenSource();
+        var token = _exportCts.Token;
 
         SetExporting(true);
         try
@@ -260,21 +276,32 @@ public partial class MainWindow : Window
                 var envelope = proc.ExtractEnvelope(movFrames);
                 WaveformRenderer.ExportMov(
                     path, peaks, width, height, color,
-                    movFrames, fps, envelope, mode, progress);
+                    movFrames, fps, envelope, mode, progress, token);
             });
             MessageBox.Show($"Saved to:\n{path}", "Export Complete",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            // Unwrap FFMpegCore exceptions to surface ffmpeg stderr output
-            var detail = ex.InnerException?.Message ?? ex.Message;
-            MessageBox.Show($"MOV export failed:\n\n{detail}", "Error",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            if (token.IsCancellationRequested)
+            {
+                DeletePartialFile(path);
+                MessageBox.Show("Export cancelled.", "Cancelled",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                // Unwrap FFMpegCore exceptions to surface ffmpeg stderr output
+                var detail = ex.InnerException?.Message ?? ex.Message;
+                MessageBox.Show($"MOV export failed:\n\n{detail}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
         finally
         {
             SetExporting(false);
+            _exportCts.Dispose();
+            _exportCts = null;
         }
     }
 
@@ -293,6 +320,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void CancelExport_Click(object sender, RoutedEventArgs e)
+    {
+        _exportCts?.Cancel();
+        CancelExportButton.IsEnabled = false;
+        ExportStatus.Text = "Cancelling…";
+    }
+
+    private static void DeletePartialFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch { /* best-effort cleanup of a partially-written file */ }
+    }
+
     // Toggle the export UI: disable inputs and show the progress bar while exporting.
     private void SetExporting(bool exporting)
     {
@@ -305,6 +345,7 @@ public partial class MainWindow : Window
             ExportProgressBar.IsIndeterminate = false;
             ExportProgressBar.Value = 0;
             ExportStatus.Text = "Starting…";
+            CancelExportButton.IsEnabled = true;
         }
     }
 

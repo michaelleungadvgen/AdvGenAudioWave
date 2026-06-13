@@ -85,7 +85,8 @@ public static class WaveformRenderer
     public static void ExportApng(
         string outputPath, float[] peaks, int width, int height,
         System.Windows.Media.Color barColor, int frameCount, long audioDurationMs,
-        float[] envelope, AnimationMode mode, IProgress<ExportProgress>? progress = null)
+        float[] envelope, AnimationMode mode, IProgress<ExportProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         if (envelope.Length < frameCount)
             throw new ArgumentException(
@@ -97,6 +98,7 @@ public static class WaveformRenderer
         using var collection = new MagickImageCollection();
         for (var i = 0; i < frameCount; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var scale = mode == AnimationMode.CursorSweep ? 1.0 : envelope[i];
             var drawCursor = mode != AnimationMode.Pulse;
             var frame = RenderFrame(baseWaveform, i, frameCount, width, height, scale, drawCursor);
@@ -125,7 +127,8 @@ public static class WaveformRenderer
     public static string ExportMov(
         string outputPath, float[] peaks, int width, int height,
         System.Windows.Media.Color barColor, int frameCount, double fps,
-        float[] envelope, AnimationMode mode, IProgress<ExportProgress>? progress = null)
+        float[] envelope, AnimationMode mode, IProgress<ExportProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         if (envelope.Length < frameCount)
             throw new ArgumentException(
@@ -139,6 +142,7 @@ public static class WaveformRenderer
         {
             for (var i = 0; i < frameCount; i++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var scale = mode == AnimationMode.CursorSweep ? 1.0 : envelope[i];
                 var drawCursor = mode != AnimationMode.Pulse;
                 var frame = RenderFrame(baseWaveform, i, frameCount, width, height, scale, drawCursor);
@@ -152,6 +156,7 @@ public static class WaveformRenderer
                     progress?.Report(new ExportProgress("Rendering frames", (i + 1) / (double)frameCount));
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             progress?.Report(new ExportProgress("Encoding video", double.NaN));
             var inputPattern = Path.Combine(tempDir, "frame%04d.png");
             FFMpegArguments
@@ -161,6 +166,7 @@ public static class WaveformRenderer
                     .WithVideoCodec("prores_ks")
                     .WithCustomArgument("-profile:v 4")
                     .WithCustomArgument("-pix_fmt yuva444p10le"))
+                .CancellableThrough(cancellationToken)
                 .ProcessSynchronously();
         }
         finally
